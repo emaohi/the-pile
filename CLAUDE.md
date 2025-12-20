@@ -24,3 +24,5 @@ A personal learning system that transforms passive content consumption into inte
 - **Never commit directly to master** - use feature branches per phase
 - Follow the implementation plan phases in order
 - Verify each phase before moving to next
+- prompt me when you think multiple tasks (withing a phase) can be run in parallel (don't depend on each other). when such case happens - we can use worktrees to acccomplish both in parallel.
+- at the end of each phase, before merging to master, execute the code-reviewer agent on the branch
