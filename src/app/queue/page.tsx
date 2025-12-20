@@ -1,4 +1,4 @@
-export default function HomePage() {
+export default function QueuePage() {
   return (
     <div className="p-8">
       <div className="max-w-2xl">
@@ -6,10 +6,10 @@ export default function HomePage() {
           className="text-2xl text-[#1A1A1A] mb-2"
           style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", serif' }}
         >
-          Welcome to thePile
+          Queue
         </h1>
         <p className="text-[#5C5752] text-sm leading-relaxed">
-          Your queue and stats will appear here.
+          Your prioritized reading queue will appear here.
         </p>
       </div>
     </div>

@@ -1,4 +1,4 @@
-export default function HomePage() {
+export default function SettingsPage() {
   return (
     <div className="p-8">
       <div className="max-w-2xl">
@@ -6,10 +6,10 @@ export default function HomePage() {
           className="text-2xl text-[#1A1A1A] mb-2"
           style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", serif' }}
         >
-          Welcome to thePile
+          Settings
         </h1>
         <p className="text-[#5C5752] text-sm leading-relaxed">
-          Your queue and stats will appear here.
+          Configure tags, preferences, and export data.
         </p>
       </div>
     </div>
