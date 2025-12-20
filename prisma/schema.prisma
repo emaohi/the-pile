@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Item {
+  id                String   @id @default(cuid())
+
+  // Content source
+  sourceType        String   // "link" | "text" | "document"
+  url               String?  @unique
+  content           String?  // extracted/pasted content
+  fileId            String?  // for document type
+  fileName          String?
+
+  // Metadata
+  title             String
+  description       String?
+  estimatedMinutes  Int?
+  tags              String   @default("[]") // JSON array
+
+  // Origin
+  sourceId          String?
+  source            Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  savedAt           DateTime @default(now())
+  userNote          String?  // note added at save time
+
+  // AI-generated
+  aiSummary         String?  // 3-5 bullet summary
+
+  // State
+  status            String   @default("queued") // "queued" | "kept" | "revisit" | "discarded"
+  priorityScore     Float    @default(0)
+
+  // Engagement
+  readAt            DateTime?
+  takeaway          String?  // user's own words
+  takeawayAt        DateTime?
+  verdict           String?  // "keep" | "revisit" | "discard"
+  verdictAt         DateTime?
+
+  // Revisit tracking
+  revisitCount      Int      @default(0)
+  revisitAfter      DateTime?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  followUps         AIFollowUp[]
+}
+
+model Source {
+  id                  String   @id @default(cuid())
+
+  // Configuration
+  type                String   // "blog" | "youtube"
+  url                 String   @unique
+  name                String
+
+  // Fetch settings
+  interval            String   @default("daily") // "hourly" | "daily" | "weekly"
+  maxPerFetch         Int      @default(3)
+  coldStartWindow     String   @default("30d") // "7d" | "30d" | "90d" | "all"
+
+  // Topic filtering
+  topicFilter         String?  // e.g., "AI, machine learning, LLMs"
+  topicFilterEnabled  Boolean  @default(false)
+
+  // Auto-tagging
+  autoTags            String   @default("[]") // JSON array
+
+  // State
+  fetchedItemIds      String   @default("[]") // JSON array of external IDs
+  lastFetchedAt       DateTime?
+  lastFetchStatus     String?  // "success" | "error" | "pending"
+  lastFetchError      String?
+
+  // Statistics
+  itemsFetchedTotal   Int      @default(0)
+  itemsQueuedTotal    Int      @default(0)
+  itemsFilteredTotal  Int      @default(0)
+
+  enabled             Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  items               Item[]
+}
+
+model UserStats {
+  id                String   @id @default("singleton")
+
+  // Streak
+  currentStreak     Int      @default(0)
+  longestStreak     Int      @default(0)
+  lastVerdictDate   DateTime?
+
+  // Counts
+  totalKept         Int      @default(0)
+  totalDiscarded    Int      @default(0)
+  totalRevisited    Int      @default(0)
+
+  // This week
+  weekStartDate     DateTime?
+  weekKept          Int      @default(0)
+  weekDiscarded     Int      @default(0)
+
+  updatedAt         DateTime @updatedAt
+}
+
+model AIFollowUp {
+  id        String   @id @default(cuid())
+  itemId    String
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  question  String
+  answer    String?
+  askedAt   DateTime @default(now())
+}
