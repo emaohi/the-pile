@@ -15,7 +15,7 @@
 5. [Core Concepts](#5-core-concepts)
 6. [Data Model](#6-data-model)
 7. [Screens & Flows](#7-screens--flows)
-8. [Priority Algorithm](#8-priority-algorithm)
+8. [Multi-Queue Algorithm](#8-multi-queue-algorithm)
 9. [AI Integration](#9-ai-integration)
 10. [Sources (Auto-Fetch)](#10-sources-auto-fetch)
 11. [Edge Cases & Empty States](#11-edge-cases--empty-states)
@@ -262,30 +262,64 @@ interface AIFollowUp {
 
 | Screen | Purpose |
 |--------|---------|
-| **Home** | Entry point, stats, streak, quick actions |
-| **Queue** | Browse queue, see "What's Next", access filters |
-| **Review** | Core flow: Read → Takeaway → AI → Verdict |
+| **Home** | Multi-queue view (3 cards) or filtered single-queue view |
+| **Review** | Core flow: Read → Takeaway → AI → Verdict (detail screen, not in nav) |
 | **Backlog** | Search/browse kept items |
 | **Sources & Input** | Auto-fetch sources (tab 1) + Manual add (tab 2) |
 | **Settings** | Tags, preferences, data export |
 
 ---
 
-### 7.2 Home Screen
+### 7.2 Home Screen (Multi-Queue View)
+
+The home screen shows three curated queues, each optimized for a different reading dimension. This replaces a single opaque priority algorithm with transparent, mood-based options.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                                                                         │
 │   thePile                                              🔥 12 day streak │
 │                                                                         │
+│   ┌─────────────────────────────────────────────────────────────────┐  │
+│   │ Filter by tag: [Select tag ▾]                                   │  │
+│   └─────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
 │   ═══════════════════════════════════════════════════════════════════  │
 │                                                                         │
-│   WHAT'S NEXT                                                          │
+│   WHAT'S NEXT                                              12 in queue │
 │                                                                         │
 │   ┌─────────────────────────────────────────────────────────────────┐  │
 │   │                                                                 │  │
+│   │   🕰️ OLDEST                                                     │  │
+│   │                                                                 │  │
 │   │   Context Engineering for AI Agents                            │  │
 │   │   simonwillison.net · ~15 min · saved 3 weeks ago              │  │
+│   │   [AI] [Prompting]                                             │  │
+│   │                                                                 │  │
+│   │   [→ Start Review]                                             │  │
+│   │                                                                 │  │
+│   └─────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│   ┌─────────────────────────────────────────────────────────────────┐  │
+│   │                                                                 │  │
+│   │   🎲 MIX IT UP                                                  │  │
+│   │                                                                 │  │
+│   │   Kubernetes Security Best Practices                           │  │
+│   │   YouTube · ~22 min · saved 5 days ago                         │  │
+│   │   [DevOps] [Security]                                          │  │
+│   │                                                                 │  │
+│   │   You've read 4 AI articles lately. Try something different.   │  │
+│   │                                                                 │  │
+│   │   [→ Start Review]                                             │  │
+│   │                                                                 │  │
+│   └─────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│   ┌─────────────────────────────────────────────────────────────────┐  │
+│   │                                                                 │  │
+│   │   ⚡ QUICK WIN                                                  │  │
+│   │                                                                 │  │
+│   │   Prompt Caching Explained                                     │  │
+│   │   anthropic.com · ~4 min · saved 1 week ago                    │  │
+│   │   [AI] [Performance]                                           │  │
 │   │                                                                 │  │
 │   │   [→ Start Review]                                             │  │
 │   │                                                                 │  │
@@ -293,35 +327,71 @@ interface AIFollowUp {
 │                                                                         │
 │   ───────────────────────────────────────────────────────────────────  │
 │                                                                         │
-│   This week: 4 kept · 2 discarded                                      │
-│                                                                         │
-│   ───────────────────────────────────────────────────────────────────  │
-│                                                                         │
-│   Queue: 12 items                    Backlog: 34 items                 │
-│                                                                         │
-│   ───────────────────────────────────────────────────────────────────  │
-│                                                                         │
-│   [+ Add Item]    [📚 Backlog]    [📡 Sources & Input]    [⚙️ Settings]│
+│   [+ Add Item]                [📚 Backlog]                [⚙️ Settings]│
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+#### The Three Queues
+
+| Queue | Icon | Rule | Purpose |
+|-------|------|------|---------|
+| **Oldest** | 🕰️ | Sorted by `savedAt` ascending | Fight recency bias |
+| **Mix It Up** | 🎲 | Maximize topic distance from last 3 verdicts | Prevent tunnel vision |
+| **Quick Win** | ⚡ | Sorted by `estimatedMinutes` ascending | Low-energy moments |
+
+#### Deduplication
+
+If an item qualifies for multiple queues (e.g., oldest item is also quickest), it shows in the first applicable queue only. Other queues backfill with next-best item.
+
+**Priority order:** Oldest → Mix It Up → Quick
+
+```typescript
+function getQueueItems(items: Item[]): { oldest: Item, mixUp: Item, quick: Item } {
+  const queued = items.filter(i => i.status === 'queued')
+
+  // First queue: pure oldest
+  const oldest = sortByAge(queued)[0]
+
+  // Second queue: most diverse, excluding oldest pick
+  const mixUp = sortByDiversity(queued)
+    .find(i => i.id !== oldest.id)
+
+  // Third queue: quickest, excluding both above
+  const quick = sortByTime(queued)
+    .find(i => i.id !== oldest.id && i.id !== mixUp?.id)
+
+  return { oldest, mixUp, quick }
+}
+```
+
+#### Small Queue Handling
+
+| Queue size | Behavior |
+|------------|----------|
+| **3+ items** | Show 3 cards |
+| **2 items** | Show 2 cards (Oldest + one other) |
+| **1 item** | Show 1 card |
+| **0 items** | Empty state |
+
 ---
 
-### 7.3 Queue Screen
+### 7.3 Home Screen: Filtered Mode
+
+When a user selects a tag filter, the multi-queue view collapses to a single queue. The user has already expressed intent ("I want AI content now"), so showing 3 options is redundant.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                                                                         │
-│   ← Queue                                                              │
+│   thePile                                              🔥 12 day streak │
 │                                                                         │
 │   ┌─────────────────────────────────────────────────────────────────┐  │
-│   │ Tags: [All ▾]   Source: [All ▾]   Time: [All ▾]                │  │
+│   │ Filtering: [AI ×]                                               │  │
 │   └─────────────────────────────────────────────────────────────────┘  │
 │                                                                         │
 │   ═══════════════════════════════════════════════════════════════════  │
 │                                                                         │
-│   WHAT'S NEXT                                                          │
+│   WHAT'S NEXT IN [AI]                                    5 of 12 items │
 │                                                                         │
 │   ┌─────────────────────────────────────────────────────────────────┐  │
 │   │                                                                 │  │
@@ -329,58 +399,58 @@ interface AIFollowUp {
 │   │   simonwillison.net · ~15 min                                  │  │
 │   │   Saved 3 weeks ago · [AI] [Prompting]                         │  │
 │   │                                                                 │  │
-│   │   Why this: Oldest item matching your filters                  │  │
+│   │   Oldest item in [AI]                                          │  │
 │   │                                                                 │  │
 │   │   [→ Start Review]                                             │  │
 │   │                                                                 │  │
 │   └─────────────────────────────────────────────────────────────────┘  │
 │                                                                         │
-│   ═══════════════════════════════════════════════════════════════════  │
+│   ───────────────────────────────────────────────────────────────────  │
 │                                                                         │
-│   UP NEXT (11 more)                                                    │
+│   UP NEXT IN [AI] (4 more)                                             │
 │                                                                         │
 │   ┌─────────────────────────────────────────────────────────────────┐  │
 │   │ RAG vs Fine-tuning                          2 weeks ago    [⋮] │  │
 │   │ Manual · ~10 min · [AI] [RAG]                                  │  │
 │   ├─────────────────────────────────────────────────────────────────┤  │
-│   │ Building Effective Agents                   10 days ago    [⋮] │  │
-│   │ YouTube · ~45 min · [AI Agents]                                │  │
-│   ├─────────────────────────────────────────────────────────────────┤  │
 │   │ Prompt Caching Explained                    1 week ago     [⋮] │  │
-│   │ anthropic.com · ~8 min · [Prompting]                           │  │
+│   │ anthropic.com · ~4 min · [AI] [Performance]                    │  │
 │   ├─────────────────────────────────────────────────────────────────┤  │
-│   │ ...                                                            │  │
+│   │ Building Effective Agents                   5 days ago     [⋮] │  │
+│   │ anthropic.com · ~30 min · [AI] [Agents]                        │  │
 │   └─────────────────────────────────────────────────────────────────┘  │
 │                                                                         │
-│   [⋮] menu: Discard, Move to top                                       │
+│   [⋮] menu: Discard                                                    │
+│                                                                         │
+│   ───────────────────────────────────────────────────────────────────  │
+│                                                                         │
+│   [+ Add Item]                [📚 Backlog]                [⚙️ Settings]│
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Filter Options:**
-- **Tags:** All, or specific tags
-- **Source:** All, Blogs, YouTube, Manual, Document
-- **Time:** All, < 15 min, 15-30 min, > 30 min
+#### Unfiltered vs Filtered Behavior
 
-#### Filters are View-Only
+| Aspect | Unfiltered (No tag) | Filtered (Tag selected) |
+|--------|---------------------|-------------------------|
+| **Cards shown** | 3 (Oldest, Mix It Up, Quick) | 1 (oldest in filter) |
+| **"Up Next" list** | Hidden | Shown (peek at queue depth) |
+| **Header** | "WHAT'S NEXT" | "WHAT'S NEXT IN [TAG]" |
+| **Item count** | Total queue size | Filtered / total |
 
-**Important:** Filters do NOT modify the underlying queue. They only narrow what the user *sees*.
+#### Why Filters Collapse to Single Queue
 
-- The queue maintains its algorithm-driven priority order
-- Filters create a "view" into the queue matching the criteria
-- "What's Next" shows the highest-priority item *within the filtered view*
-- When filters are removed, the full queue is visible again
+The multi-queue design provides variety across dimensions (age, topic, time). When user filters by tag, they've made a topic choice—"Mix It Up" would conflict (it shows *different* topics).
 
-**Why this matters:**
-- Preserves the "app decides" philosophy—user filters by mood/time, but priority still matters
-- Prevents users from gaming the system to always see new items
-- Oldest items within any filter set still surface first
+**Mental model:**
+- **No filter** = "Surprise me" → 3 angles
+- **Filter active** = "I know what I want" → app picks oldest in that set
 
-**Example:**
-- Full queue: 12 items, oldest is 3 weeks old (AI article)
-- User filters to [RAG] tag only: 3 items visible
-- "What's Next" shows oldest RAG item (2 weeks old), not the 3-week AI article
-- User's available time matters within context; algorithm still fights recency bias
+#### Filter Options (V1)
+
+- **Tag filter only** — time dimension covered by Quick queue, topic diversity by Mix It Up
+- Filtered view shows oldest item first within the tag
+- Clear filter returns to multi-queue view
 
 ---
 
@@ -1057,57 +1127,78 @@ When selecting "Bulk CSV":
 
 ---
 
-## 8. Priority Algorithm
+## 8. Multi-Queue Algorithm
 
-### 8.1 Scoring Factors
+Instead of a single weighted priority score, thePile uses **three separate queues**, each optimized for a different dimension. This provides transparency ("why this item?") and lets users choose based on current mood without browsing.
+
+### 8.1 The Three Queues
+
+| Queue | Sort Logic | Purpose |
+|-------|------------|---------|
+| **🕰️ Oldest** | `savedAt` ascending | Fight recency bias |
+| **🎲 Mix It Up** | Maximize tag distance from last 3 verdicts | Prevent topic tunnel vision |
+| **⚡ Quick Win** | `estimatedMinutes` ascending | Low-energy moments |
+
+### 8.2 Queue Selection Logic
 
 ```typescript
-function calculatePriority(item: Item): number {
-  const weights = {
-    age: 0.40,              // Older items score higher (kills recency bias)
-    topicDiversity: 0.20,   // Avoid showing same topic repeatedly
-    sourceAffinity: 0.15,   // Sources user engages with more
-    estimatedTime: 0.10,    // Match user's available time
-    revisitPenalty: 0.15    // Revisited items score lower
-  }
-  
-  return weightedSum(weights, {
-    age: ageScore(item.savedAt),
-    topicDiversity: diversityScore(item.tags),
-    sourceAffinity: sourceScore(item.sourceId),
-    estimatedTime: timeScore(item.estimatedMinutes),
-    revisitPenalty: revisitScore(item.revisitCount)
+function getQueueItems(items: Item[]): { oldest: Item, mixUp: Item, quick: Item } {
+  const queued = items.filter(i => i.status === 'queued')
+
+  // First queue: pure oldest
+  const oldest = sortByAge(queued)[0]
+
+  // Second queue: most diverse, excluding oldest pick
+  const mixUp = sortByDiversity(queued, getRecentVerdictTags())
+    .find(i => i.id !== oldest.id)
+
+  // Third queue: quickest, excluding both above
+  const quick = sortByTime(queued)
+    .find(i => i.id !== oldest.id && i.id !== mixUp?.id)
+
+  return { oldest, mixUp, quick }
+}
+```
+
+### 8.3 Diversity Score (Mix It Up Queue)
+
+```typescript
+function sortByDiversity(items: Item[], recentTags: string[]): Item[] {
+  return items.sort((a, b) => {
+    const aOverlap = countOverlap(a.tags, recentTags)
+    const bOverlap = countOverlap(b.tags, recentTags)
+    return aOverlap - bOverlap  // Lower overlap = higher priority
   })
 }
-```
 
-### 8.2 Age Score (Core to Philosophy)
-
-```typescript
-function ageScore(savedAt: Date): number {
-  const daysOld = daysSince(savedAt)
-  
-  // Logarithmic: rapid increase early, plateau later
-  // 1 day = 0.15, 7 days = 0.50, 30 days = 0.85, 90+ days = 1.0
-  return Math.min(1, Math.log10(daysOld + 1) / 2)
+function getRecentVerdictTags(): string[] {
+  // Get tags from last 3 items that received a verdict
+  return getRecentVerdicts(3).flatMap(item => item.tags)
 }
 ```
 
-**Effect:** An item saved 3 weeks ago will almost always rank above an item saved today. This is the core mechanism against recency bias.
+**Effect:** If user has been reading AI articles, Mix It Up surfaces items with non-AI tags.
 
-### 8.3 Revisit Handling
+### 8.4 Deduplication
 
-```typescript
-function revisitScore(revisitCount: number): number {
-  // Each revisit reduces priority slightly
-  // Prevents "Revisit" from becoming a hoarding mechanism
-  return Math.max(0, 1 - (revisitCount * 0.2))
-}
-```
+If an item qualifies for multiple queues (e.g., oldest is also quickest), show it in the first applicable queue only. Others backfill with next-best.
+
+**Priority order:** Oldest → Mix It Up → Quick
+
+### 8.5 Revisit Handling
 
 **Revisit cooldown:** Items marked Revisit re-enter the queue after 7 days.
 
-**Revisit limit:** After 3 revisits, the item is auto-discarded with a prompt: "You've revisited this 3 times. Keep or discard?"
+**Revisit limit:** After 3 revisits, force a final decision: "You've revisited this 3 times. Keep or discard?"
+
+**Revisit in queues:** Revisited items are eligible for all three queues but sorted by their *original* `savedAt` date (not revisit date) to prevent gaming.
+
+### 8.6 Filtered Mode
+
+When a tag filter is active, the multi-queue collapses to a single queue:
+- Show oldest item within the filtered set
+- No Mix It Up (user already chose topic)
+- No Quick (can browse "Up Next" list for short items)
 
 ---
 
@@ -1610,7 +1701,7 @@ function updateStreak(streak: Streak, verdictDate: Date): Streak {
 |----------|-----------|
 | **No open AI chat** | Prevents rabbit holes; closed questions force focus |
 | **Takeaway required before AI** | Forces active thinking, prevents passive consumption |
-| **Age-weighted priority** | Core mechanism against recency bias |
+| **Multi-queue over weighted algorithm** | Three queues (Oldest, Mix It Up, Quick) more transparent than single opaque score; user understands "why this item" from structure alone; lets user pick based on mood without browsing full queue |
 | **Three verdicts only** | Simple, exhaustive, mutually exclusive |
 | **Revisit has limits** | Prevents "Revisit" from becoming hoarding |
 | **No knowledge map in V1** | Validate core loop first |
@@ -1619,7 +1710,9 @@ function updateStreak(streak: Streak, verdictDate: Date): Streak {
 | **Topic filtering per source** | Prevents queue pollution from prolific multi-topic sources |
 | **Sources & Input combined** | Single screen for "where content comes from"—reduces navigation, unified mental model |
 | **CSV bulk import** | Power users have existing link collections to migrate |
-| **Queue filters are view-only** | Preserves "app decides" philosophy; user filters mood, not priority |
+| **Tag filter collapses to single queue** | Filter = user chose topic, so "Mix It Up" conflicts; show oldest in filtered set only |
+| **Merged Home and Queue screens** | With multi-queue, Home IS the queue; separate screen redundant |
+| **Tag-only filter in V1** | Time covered by Quick queue, diversity by Mix It Up; tag is main user intent signal |
 | **Warm takeaway design** | Critical friction point—must feel inviting, not demanding |
 | **Landing page before build** | Validate demand before investing in full implementation |
 

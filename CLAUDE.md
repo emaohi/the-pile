@@ -9,7 +9,7 @@ A personal learning system that transforms passive content consumption into inte
 ## Documentation
 
 - **Design doc:** `docs/thepile-lean-v1-design-doc.md` - Full product spec, screens, data model, algorithms
-- **Implementation plan:** `docs/2025-12-20-lean-v1-implementation.md` - Phase-by-phase build instructions
+- **Implementation plan:** `docs/2025-01-implementation-plan.md` - Phase-by-phase build instructions
 
 ## Tech Stack
 

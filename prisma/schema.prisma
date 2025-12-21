@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -7,107 +8,120 @@ datasource db {
 }
 
 model Item {
-  id                String   @id @default(cuid())
+  id          String   @id @default(cuid())
 
-  // Content source
-  sourceType        String   // "link" | "text" | "document"
-  url               String?  @unique
-  content           String?  // extracted/pasted content
-  fileId            String?  // for document type
-  fileName          String?
+  // Content - stored as JSON for flexibility
+  sourceType  String   // 'link' | 'text' | 'document'
+  sourceData  String   // JSON: { url, content } | { content, attribution } | { fileId, fileName, extractedText }
 
-  // Metadata
-  title             String
-  description       String?
-  estimatedMinutes  Int?
-  tags              String   @default("[]") // JSON array
+  title       String
+  description String?
+  estimatedMinutes Int?
 
   // Origin
-  sourceId          String?
-  source            Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  savedAt           DateTime @default(now())
-  userNote          String?  // note added at save time
+  sourceId    String?
+  source      Source?  @relation(fields: [sourceId], references: [id])
+  savedAt     DateTime @default(now())
+  userNote    String?
 
   // AI-generated
-  aiSummary         String?  // 3-5 bullet summary
+  aiSummary   String?
 
   // State
-  status            String   @default("queued") // "queued" | "kept" | "revisit" | "discarded"
-  priorityScore     Float    @default(0)
+  status      String   @default("queued") // 'queued' | 'kept' | 'revisit' | 'discarded'
+  priorityScore Float  @default(0)
 
   // Engagement
-  readAt            DateTime?
-  takeaway          String?  // user's own words
-  takeawayAt        DateTime?
-  verdict           String?  // "keep" | "revisit" | "discard"
-  verdictAt         DateTime?
+  readAt      DateTime?
+  takeaway    String?
+  takeawayAt  DateTime?
+  verdict     String?  // 'keep' | 'revisit' | 'discard'
+  verdictAt   DateTime?
 
   // Revisit tracking
-  revisitCount      Int      @default(0)
-  revisitAfter      DateTime?
+  revisitCount Int     @default(0)
+  revisitAfter DateTime?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  followUps         AIFollowUp[]
+  // Relations
+  tags        ItemTag[]
+  followUps   AIFollowUp[]
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  name  String    @unique
+  items ItemTag[]
+}
+
+model ItemTag {
+  itemId String
+  tagId  String
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, tagId])
 }
 
 model Source {
-  id                  String   @id @default(cuid())
+  id        String   @id @default(cuid())
 
   // Configuration
-  type                String   // "blog" | "youtube"
-  url                 String   @unique
-  name                String
+  type      String   // 'blog' | 'youtube'
+  url       String   @unique
+  name      String
 
   // Fetch settings
-  interval            String   @default("daily") // "hourly" | "daily" | "weekly"
-  maxPerFetch         Int      @default(3)
-  coldStartWindow     String   @default("30d") // "7d" | "30d" | "90d" | "all"
+  interval  String   @default("daily") // 'hourly' | 'daily' | 'weekly'
+  maxPerFetch Int    @default(3)
+  coldStartWindow String @default("30d") // '7d' | '30d' | '90d' | 'all'
 
   // Topic filtering
-  topicFilter         String?  // e.g., "AI, machine learning, LLMs"
-  topicFilterEnabled  Boolean  @default(false)
+  topicFilter String?
+  topicFilterEnabled Boolean @default(false)
 
-  // Auto-tagging
-  autoTags            String   @default("[]") // JSON array
+  // Auto-tagging (stored as JSON array)
+  autoTags  String   @default("[]")
 
   // State
-  fetchedItemIds      String   @default("[]") // JSON array of external IDs
-  lastFetchedAt       DateTime?
-  lastFetchStatus     String?  // "success" | "error" | "pending"
-  lastFetchError      String?
+  fetchedItemIds String @default("[]") // JSON array of item IDs
+  lastFetchedAt DateTime?
+  lastFetchStatus String @default("pending") // 'success' | 'error' | 'pending'
+  lastFetchError String?
 
-  // Statistics
-  itemsFetchedTotal   Int      @default(0)
-  itemsQueuedTotal    Int      @default(0)
-  itemsFilteredTotal  Int      @default(0)
+  // Stats
+  itemsFetchedTotal Int @default(0)
+  itemsQueuedTotal Int @default(0)
+  itemsFilteredTotal Int @default(0)
+  lastFetchStats String? // JSON: { fetched, queued, filtered }
 
-  enabled             Boolean  @default(true)
-  createdAt           DateTime @default(now())
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
 
-  items               Item[]
+  items     Item[]
 }
 
 model UserStats {
-  id                String   @id @default("singleton")
+  id             String   @id @default("singleton")
 
   // Streak
-  currentStreak     Int      @default(0)
-  longestStreak     Int      @default(0)
-  lastVerdictDate   DateTime?
+  currentStreak  Int      @default(0)
+  longestStreak  Int      @default(0)
+  lastVerdictDate DateTime?
 
   // Counts
-  totalKept         Int      @default(0)
-  totalDiscarded    Int      @default(0)
-  totalRevisited    Int      @default(0)
+  totalKept      Int      @default(0)
+  totalDiscarded Int      @default(0)
+  totalRevisited Int      @default(0)
 
-  // This week
-  weekStartDate     DateTime?
-  weekKept          Int      @default(0)
-  weekDiscarded     Int      @default(0)
+  // Weekly stats (reset weekly)
+  weekStartDate  DateTime?
+  weeklyKept     Int      @default(0)
+  weeklyDiscarded Int     @default(0)
 
-  updatedAt         DateTime @updatedAt
+  updatedAt      DateTime @updatedAt
 }
 
 model AIFollowUp {
@@ -116,5 +130,6 @@ model AIFollowUp {
   item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   question  String
   answer    String?
-  askedAt   DateTime @default(now())
+  askedAt   DateTime?
+  createdAt DateTime @default(now())
 }

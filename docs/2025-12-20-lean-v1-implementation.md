@@ -557,16 +557,13 @@ Create `src/lib/db.ts`:
 
 ```typescript
 import { PrismaClient } from '@prisma/client'
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
-}
+const adapter = new PrismaBetterSqlite3({
+  url: process.env.DATABASE_URL || 'file:./dev.db'
+})
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient()
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma
-}
+export const prisma = new PrismaClient({ adapter })
 ```
 
 **Step 5: Generate Prisma client and migrate**
@@ -1260,6 +1257,103 @@ git commit -m "feat: add item and source server actions"
 - Create: `src/app/sources/add-text-dialog.tsx`
 - Create: `src/app/sources/add-source-dialog.tsx`
 - Create: `src/app/sources/source-list.tsx`
+
+**Step 0: Seed Data (Optional)**
+
+Create `prisma/seed.ts` to populate the database with initial data for testing.
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
+
+const adapter = new PrismaBetterSqlite3({
+  url: process.env.DATABASE_URL || 'file:./dev.db'
+})
+
+const prisma = new PrismaClient({ adapter })
+
+async function main() {
+  // Create sources
+  const hn = await prisma.source.create({
+    data: {
+      type: 'blog',
+      url: 'https://news.ycombinator.com',
+      name: 'Hacker News',
+      interval: 'daily',
+      topicFilter: 'AI, LLM, programming',
+      topicFilterEnabled: true,
+    }
+  })
+
+  const simon = await prisma.source.create({
+    data: {
+      type: 'blog',
+      url: 'https://simonwillison.net',
+      name: 'Simon Willison',
+      interval: 'daily',
+      autoTags: '["AI", "LLM"]',
+    }
+  })
+
+  // Create items
+  await prisma.item.create({
+    data: {
+      sourceType: 'link',
+      url: 'https://simonwillison.net/2024/Dec/20/anthropic-artifacts/',
+      title: 'Anthropic Artifacts',
+      sourceId: simon.id,
+      status: 'queued',
+      priorityScore: 0.8,
+      savedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
+      estimatedMinutes: 5,
+      tags: '["AI", "LLM", "Claude"]',
+    }
+  })
+
+  await prisma.item.create({
+    data: {
+      sourceType: 'link',
+      url: 'https://news.ycombinator.com/item?id=123456',
+      title: 'Show HN: thePile - A read-later app that forces you to learn',
+      sourceId: hn.id,
+      status: 'queued',
+      priorityScore: 0.9,
+      savedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5), // 5 days ago
+      estimatedMinutes: 10,
+      tags: '["Productivity", "Learning"]',
+    }
+  })
+
+  await prisma.item.create({
+    data: {
+      sourceType: 'text',
+      title: 'Idea for a new project',
+      content: 'Build a tool that helps people learn better by forcing them to make a decision about what they read.',
+      status: 'queued',
+      priorityScore: 0.5,
+      savedAt: new Date(),
+      tags: '["Idea", "Project"]',
+    }
+  })
+}
+
+main()
+  .then(async () => {
+    await prisma.$disconnect()
+  })
+  .catch(async (e) => {
+    console.error(e)
+    await prisma.$disconnect()
+    process.exit(1)
+  })
+```
+
+Add to `package.json`:
+```json
+"prisma": {
+  "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+}
+```
 
 **Step 1: Create Add Link Dialog**
 
