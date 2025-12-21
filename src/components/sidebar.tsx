@@ -7,7 +7,6 @@ import { Home, ListTodo, Archive, Rss, Settings } from 'lucide-react'
 
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
-  { href: '/queue', label: 'Queue', icon: ListTodo },
   { href: '/backlog', label: 'Backlog', icon: Archive },
   { href: '/sources', label: 'Sources & Input', icon: Rss },
   { href: '/settings', label: 'Settings', icon: Settings },
@@ -21,51 +20,53 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-60 bg-[#FAF9F7] border-r border-[#E8E4DF] flex flex-col">
+    <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col h-screen sticky top-0">
       {/* Brand */}
-      <div className="p-6 pb-8">
-        <Link href="/" className="block">
-          <h1
-            className="text-xl tracking-tight text-[#1A1A1A]"
-            style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", serif' }}
-          >
+      <div className="p-8 pb-10">
+        <Link href="/" className="block group">
+          <h1 className="text-2xl font-serif tracking-tight text-sidebar-foreground group-hover:text-primary transition-colors duration-300">
             thePile
           </h1>
-          <p className="text-[9px] tracking-[0.2em] uppercase text-[#B5B0A9] mt-0.5">
+          <p className="text-[10px] tracking-[0.25em] uppercase text-muted-foreground mt-1 font-medium">
             Learning System
           </p>
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3">
-        <ul className="space-y-1">
+      <nav className="flex-1 px-4">
+        <ul className="space-y-2">
           {navItems.map((item, index) => {
             const Icon = item.icon
             const isActive = pathname === item.href
             return (
               <li
                 key={item.href}
-                style={{ animationDelay: `${index * 50}ms` }}
-                className="animate-in fade-in slide-in-from-left-2 duration-300"
+                style={{ animationDelay: `${index * 75}ms` }}
+                className="animate-in fade-in slide-in-from-left-4 duration-500 fill-mode-backwards"
               >
                 <Link
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm transition-all duration-200 group',
+                    'flex items-center gap-3 px-4 py-3 rounded-md text-sm transition-all duration-300 group relative overflow-hidden',
                     isActive
-                      ? 'bg-[#1A1A1A] text-white'
-                      : 'text-[#5C5752] hover:bg-[#EFEBE6] hover:text-[#1A1A1A]'
+                      ? 'text-primary-foreground bg-primary shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-accent'
                   )}
                 >
                   <Icon
                     className={cn(
-                      'h-4 w-4 transition-transform duration-200',
-                      !isActive && 'group-hover:scale-110'
+                      'h-4 w-4 transition-transform duration-300',
+                      !isActive && 'group-hover:scale-110 group-hover:rotate-3'
                     )}
-                    strokeWidth={1.5}
+                    strokeWidth={isActive ? 2 : 1.5}
                   />
-                  <span className="tracking-wide">{item.label}</span>
+                  <span className={cn("tracking-wide font-medium", isActive ? "font-semibold" : "")}>
+                    {item.label}
+                  </span>
+                  {isActive && (
+                    <div className="absolute inset-0 bg-white/10 animate-pulse pointer-events-none" />
+                  )}
                 </Link>
               </li>
             )
@@ -74,9 +75,14 @@ export function Sidebar() {
       </nav>
 
       {/* Footer decoration */}
-      <div className="p-6 pt-4">
-        <div className="h-px bg-gradient-to-r from-transparent via-[#E8E4DF] to-transparent" />
-        <p className="text-[9px] tracking-[0.1em] uppercase text-[#C5C0B9] mt-4 text-center">
+      <div className="p-8">
+        <div className="h-px bg-gradient-to-r from-transparent via-sidebar-border to-transparent mb-6" />
+        <div className="flex justify-center gap-4 text-muted-foreground/50">
+          <div className="w-1 h-1 rounded-full bg-current" />
+          <div className="w-1 h-1 rounded-full bg-current" />
+          <div className="w-1 h-1 rounded-full bg-current" />
+        </div>
+        <p className="text-[10px] tracking-[0.15em] uppercase text-muted-foreground/70 mt-4 text-center font-medium">
           Read · Reflect · Retain
         </p>
       </div>
