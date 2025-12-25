@@ -50,8 +50,8 @@ export async function getRecentVerdictTags(limit = 3): Promise<string[]> {
     where: { verdict: { not: null } },
     orderBy: { verdictAt: 'desc' },
     take: limit,
-    include: { tags: { include: { tag: true } } } as any,
-  })
+    include: { tags: { include: { tag: true } } },
+  }) as unknown as Array<{ tags: Array<{ tag: { name: string } }> }>
 
   return recentItems.flatMap((item) => item.tags.map((t) => t.tag.name))
 }

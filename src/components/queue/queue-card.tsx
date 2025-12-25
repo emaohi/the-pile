@@ -36,13 +36,19 @@ interface QueueCardProps {
   className?: string
 }
 
+function getDomain(url: string | undefined): string {
+  if (!url) return 'Manual'
+  try {
+    return new URL(url).hostname.replace('www.', '')
+  } catch {
+    return 'Link'
+  }
+}
+
 export function QueueCard({ queueItem, className }: QueueCardProps) {
   const { type, item, reason } = queueItem
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sourceData = JSON.parse((item as any).sourceData || '{}')
-  const domain = sourceData.url
-    ? new URL(sourceData.url).hostname.replace('www.', '')
-    : 'Manual'
+  const sourceData = JSON.parse(item.sourceData || '{}')
+  const domain = getDomain(sourceData.url)
 
   let SourceIcon = LinkIcon
   if (item.source?.type === 'youtube') SourceIcon = Youtube
