@@ -49,10 +49,11 @@ async function BacklogContent() {
         </div>
         <div className="flex items-center gap-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
             <Input
-              placeholder="Search your knowledge..."
-              className="pl-10 w-64 bg-secondary/50 border-border/50 focus:bg-card"
+              placeholder="Search coming soon..."
+              disabled
+              className="pl-10 w-64 bg-secondary/50 border-border/50 cursor-not-allowed opacity-60"
             />
           </div>
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 border border-border/50">
@@ -91,7 +92,7 @@ async function BacklogContent() {
                   {/* Takeaway quote */}
                   {item.takeaway && (
                     <div className="px-3 py-2 rounded-lg bg-stone-100 text-xs text-stone-500 italic border border-stone-200/80">
-                      "{item.takeaway}"
+                      &ldquo;{item.takeaway}&rdquo;
                     </div>
                   )}
 
