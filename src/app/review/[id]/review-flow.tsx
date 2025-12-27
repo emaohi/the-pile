@@ -17,42 +17,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { ArrowLeft, ExternalLink, Check, Trash2, Clock, Sparkles, Play, FileText } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Check, Trash2, Clock, Sparkles, Play, FileText, Pencil } from 'lucide-react'
 import { markRead, submitTakeaway, submitVerdict, discardItem } from '@/app/actions/items'
 import type { ItemWithRelations, Verdict } from '@/types'
-import { cn } from '@/lib/utils'
+import { cn, parseSourceData, getDomain, isYouTubeUrl } from '@/lib/utils'
 
 type ReviewStep = 'read' | 'takeaway' | 'verdict'
 
 interface ReviewFlowProps {
   item: ItemWithRelations
-}
-
-function getDomain(url: string | undefined): string {
-  if (!url) return 'Manual entry'
-  try {
-    return new URL(url).hostname.replace('www.', '')
-  } catch {
-    return 'Link'
-  }
-}
-
-function isYouTubeUrl(url: string | undefined): boolean {
-  if (!url) return false
-  try {
-    const hostname = new URL(url).hostname.replace('www.', '')
-    return hostname.includes('youtube.com') || hostname.includes('youtu.be')
-  } catch {
-    return false
-  }
-}
-
-function parseSourceData(data: string | null | undefined): { url?: string } {
-  try {
-    return JSON.parse(data || '{}')
-  } catch {
-    return {}
-  }
 }
 
 function StepIndicator({ currentStep }: { currentStep: ReviewStep }) {
@@ -115,6 +88,7 @@ export function ReviewFlow({ item }: ReviewFlowProps) {
   const [takeaway, setTakeaway] = useState(item.takeaway ?? '')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isEditingTakeaway, setIsEditingTakeaway] = useState(false)
 
   const sourceData = parseSourceData(item.sourceData)
   const sourceUrl = sourceData.url
@@ -144,6 +118,21 @@ export function ReviewFlow({ item }: ReviewFlowProps) {
       setStep('verdict')
     } catch (err) {
       console.error('Failed to submit takeaway:', err)
+      setError('Failed to save takeaway. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleSaveEditedTakeaway = async () => {
+    if (takeaway.trim().length < 20) return
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      await submitTakeaway(item.id, takeaway)
+      setIsEditingTakeaway(false)
+    } catch (err) {
+      console.error('Failed to save takeaway:', err)
       setError('Failed to save takeaway. Please try again.')
     } finally {
       setIsSubmitting(false)
@@ -353,12 +342,62 @@ export function ReviewFlow({ item }: ReviewFlowProps) {
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
             {/* User's takeaway */}
             <div className="bg-card rounded-2xl border-2 border-border p-6">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
-                Your takeaway
-              </p>
-              <blockquote className="font-serif text-lg italic text-foreground/90 border-l-2 border-primary pl-4">
-                "{takeaway || item.takeaway}"
-              </blockquote>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Your takeaway
+                </p>
+                {!isEditingTakeaway && (
+                  <button
+                    onClick={() => setIsEditingTakeaway(true)}
+                    className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    Edit
+                  </button>
+                )}
+              </div>
+
+              {isEditingTakeaway ? (
+                <div className="space-y-4">
+                  <Textarea
+                    value={takeaway}
+                    onChange={(e) => setTakeaway(e.target.value)}
+                    className="min-h-[100px] resize-none text-base border-border"
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {takeaway.length < 20 ? (
+                        <span className="text-amber-600">{20 - takeaway.length} more characters needed</span>
+                      ) : (
+                        <span className="text-green-600">Ready to save</span>
+                      )}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setTakeaway(item.takeaway ?? '')
+                          setIsEditingTakeaway(false)
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveEditedTakeaway}
+                        disabled={takeaway.trim().length < 20 || isSubmitting}
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <blockquote className="font-serif text-lg italic text-foreground/90 border-l-2 border-primary pl-4">
+                  &ldquo;{takeaway || item.takeaway}&rdquo;
+                </blockquote>
+              )}
             </div>
 
             {/* AI Summary */}

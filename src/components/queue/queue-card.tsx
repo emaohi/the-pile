@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import type { QueueItem } from '@/types'
 import { Clock, Calendar, ArrowRight, FileText, Video, Link as LinkIcon, Rss, AlignLeft } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, parseSourceData, getDomain, isYouTubeUrl } from '@/lib/utils'
 
 const queueConfig: Record<string, { icon: string; label: string; stackColor: string }> = {
   oldest: { icon: '🕰️', label: 'OLDEST', stackColor: 'bg-amber-100/80' },
@@ -27,33 +27,6 @@ interface QueueCardProps {
   queueItem: QueueItem
   className?: string
   queueDepth?: number // Number of items in this queue (for stack visualization)
-}
-
-function getDomain(url: string | undefined): string {
-  if (!url) return 'Manual'
-  try {
-    return new URL(url).hostname.replace('www.', '')
-  } catch {
-    return 'Link'
-  }
-}
-
-function isYouTubeUrl(url: string | undefined): boolean {
-  if (!url) return false
-  try {
-    const hostname = new URL(url).hostname.replace('www.', '')
-    return hostname.includes('youtube.com') || hostname.includes('youtu.be')
-  } catch {
-    return false
-  }
-}
-
-function parseSourceData(data: string | null | undefined): { url?: string } {
-  try {
-    return JSON.parse(data || '{}')
-  } catch {
-    return {}
-  }
 }
 
 export function QueueCard({ queueItem, className, queueDepth = 3 }: QueueCardProps) {
