@@ -4,10 +4,14 @@ import type { ItemWithRelations, ItemSourceData, Verdict } from '@/types'
 export async function getQueuedItems(): Promise<ItemWithRelations[]> {
   const items = await db.item.findMany({
     where: {
-      status: 'queued',
       OR: [
-        { revisitAfter: null },
-        { revisitAfter: { lte: new Date() } },
+        // Regular queued items
+        { status: 'queued' },
+        // Revisit items whose time has come
+        {
+          status: 'revisit',
+          revisitAfter: { lte: new Date() },
+        },
       ],
     },
     include: {
