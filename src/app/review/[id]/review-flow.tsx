@@ -6,7 +6,18 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { ArrowLeft, ExternalLink, Check, Trash2, Clock, Sparkles } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { ArrowLeft, ExternalLink, Check, Trash2, Clock, Sparkles, Play, FileText } from 'lucide-react'
 import { markRead, submitTakeaway, submitVerdict, discardItem } from '@/app/actions/items'
 import type { ItemWithRelations, Verdict } from '@/types'
 import { cn } from '@/lib/utils'
@@ -23,6 +34,24 @@ function getDomain(url: string | undefined): string {
     return new URL(url).hostname.replace('www.', '')
   } catch {
     return 'Link'
+  }
+}
+
+function isYouTubeUrl(url: string | undefined): boolean {
+  if (!url) return false
+  try {
+    const hostname = new URL(url).hostname.replace('www.', '')
+    return hostname.includes('youtube.com') || hostname.includes('youtu.be')
+  } catch {
+    return false
+  }
+}
+
+function parseSourceData(data: string | null | undefined): { url?: string } {
+  try {
+    return JSON.parse(data || '{}')
+  } catch {
+    return {}
   }
 }
 
@@ -85,39 +114,69 @@ export function ReviewFlow({ item }: ReviewFlowProps) {
   )
   const [takeaway, setTakeaway] = useState(item.takeaway ?? '')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const sourceData = JSON.parse(item.sourceData || '{}')
+  const sourceData = parseSourceData(item.sourceData)
   const sourceUrl = sourceData.url
   const domain = getDomain(sourceUrl)
+  const isYouTube = isYouTubeUrl(sourceUrl)
 
   const handleMarkRead = async () => {
     setIsSubmitting(true)
-    await markRead(item.id)
-    setStep('takeaway')
-    setIsSubmitting(false)
+    setError(null)
+    try {
+      await markRead(item.id)
+      setStep('takeaway')
+    } catch (err) {
+      console.error('Failed to mark read:', err)
+      setError('Failed to save progress. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleSubmitTakeaway = async () => {
     if (takeaway.trim().length < 20) return
     setIsSubmitting(true)
-    await submitTakeaway(item.id, takeaway)
-    setStep('verdict')
-    setIsSubmitting(false)
+    setError(null)
+    try {
+      await submitTakeaway(item.id, takeaway)
+      setStep('verdict')
+    } catch (err) {
+      console.error('Failed to submit takeaway:', err)
+      setError('Failed to save takeaway. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleVerdict = async (verdict: Verdict) => {
     setIsSubmitting(true)
-    await submitVerdict(item.id, verdict)
-    router.push('/')
+    setError(null)
+    try {
+      await submitVerdict(item.id, verdict)
+      router.push('/')
+    } catch (err) {
+      console.error('Failed to submit verdict:', err)
+      setError('Failed to save verdict. Please try again.')
+      setIsSubmitting(false)
+    }
   }
 
   const handleDiscard = async () => {
-    if (confirm('Discard this item? This cannot be undone.')) {
-      setIsSubmitting(true)
+    setIsSubmitting(true)
+    setError(null)
+    try {
       await discardItem(item.id)
       router.push('/')
+    } catch (err) {
+      console.error('Failed to discard:', err)
+      setError('Failed to discard item. Please try again.')
+      setIsSubmitting(false)
     }
   }
+
+  const SourceIcon = isYouTube ? Play : FileText
 
   return (
     <div className="max-w-2xl mx-auto px-4 pb-12">
@@ -129,16 +188,44 @@ export function ReviewFlow({ item }: ReviewFlowProps) {
             Back to queue
           </Link>
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleDiscard}
-          className="text-muted-foreground hover:text-destructive"
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Discard
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-destructive"
+              disabled={isSubmitting}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Discard
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Discard this item?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. The item will be permanently removed from your queue.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDiscard}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Discard
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
+
+      {/* Error display */}
+      {error && (
+        <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Progress Indicator */}
       <StepIndicator currentStep={step} />
@@ -177,12 +264,13 @@ export function ReviewFlow({ item }: ReviewFlowProps) {
           <div className="text-center space-y-8 py-8 animate-in fade-in duration-500">
             <div className="space-y-3">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-                <ExternalLink className="w-7 h-7 text-primary" />
+                <SourceIcon className="w-7 h-7 text-primary" />
               </div>
-              <h2 className="font-serif text-xl font-medium">Time to read</h2>
+              <h2 className="font-serif text-xl font-medium">{isYouTube ? 'Time to watch' : 'Time to read'}</h2>
               <p className="text-muted-foreground max-w-md mx-auto">
-                Open the article and read it mindfully. Take your time—there's no rush.
-                Come back when you're ready to reflect.
+                {isYouTube
+                  ? 'Watch the video and give it your full attention. Come back when you\'re ready to reflect.'
+                  : 'Open the article and read it mindfully. Take your time—there\'s no rush. Come back when you\'re ready to reflect.'}
               </p>
             </div>
 
@@ -190,7 +278,7 @@ export function ReviewFlow({ item }: ReviewFlowProps) {
               <Button asChild size="lg" variant="outline" className="gap-2">
                 <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="w-4 h-4" />
-                  Open article
+                  {isYouTube ? 'Open video' : 'Open article'}
                 </a>
               </Button>
             )}
@@ -203,7 +291,7 @@ export function ReviewFlow({ item }: ReviewFlowProps) {
                 className="gap-2 min-w-[200px]"
               >
                 <Check className="w-4 h-4" />
-                I've finished reading
+                {isYouTube ? 'I\'ve finished watching' : 'I\'ve finished reading'}
               </Button>
             </div>
           </div>
@@ -273,18 +361,22 @@ export function ReviewFlow({ item }: ReviewFlowProps) {
               </blockquote>
             </div>
 
-            {/* AI Summary if available */}
-            {item.aiSummary && (
-              <div className="bg-secondary/30 rounded-2xl border border-border p-6">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  AI Summary
-                </p>
+            {/* AI Summary */}
+            <div className="bg-secondary/30 rounded-2xl border border-border p-6">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5" />
+                AI Takeaway
+              </p>
+              {item.aiSummary ? (
                 <p className="text-sm text-muted-foreground whitespace-pre-line">
                   {item.aiSummary}
                 </p>
-              </div>
-            )}
+              ) : (
+                <p className="text-sm text-muted-foreground/60 italic">
+                  AI takeaway will appear here once generated...
+                </p>
+              )}
+            </div>
 
             {/* Verdict Section */}
             <div className="space-y-4">
