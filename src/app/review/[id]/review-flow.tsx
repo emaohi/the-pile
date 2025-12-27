@@ -20,39 +20,12 @@ import {
 import { ArrowLeft, ExternalLink, Check, Trash2, Clock, Sparkles, Play, FileText } from 'lucide-react'
 import { markRead, submitTakeaway, submitVerdict, discardItem } from '@/app/actions/items'
 import type { ItemWithRelations, Verdict } from '@/types'
-import { cn } from '@/lib/utils'
+import { cn, parseSourceData, getDomain, isYouTubeUrl } from '@/lib/utils'
 
 type ReviewStep = 'read' | 'takeaway' | 'verdict'
 
 interface ReviewFlowProps {
   item: ItemWithRelations
-}
-
-function getDomain(url: string | undefined): string {
-  if (!url) return 'Manual entry'
-  try {
-    return new URL(url).hostname.replace('www.', '')
-  } catch {
-    return 'Link'
-  }
-}
-
-function isYouTubeUrl(url: string | undefined): boolean {
-  if (!url) return false
-  try {
-    const hostname = new URL(url).hostname.replace('www.', '')
-    return hostname.includes('youtube.com') || hostname.includes('youtu.be')
-  } catch {
-    return false
-  }
-}
-
-function parseSourceData(data: string | null | undefined): { url?: string } {
-  try {
-    return JSON.parse(data || '{}')
-  } catch {
-    return {}
-  }
 }
 
 function StepIndicator({ currentStep }: { currentStep: ReviewStep }) {
